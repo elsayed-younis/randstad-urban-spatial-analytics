@@ -1,0 +1,14 @@
+version: 2
+
+sources:
+  - name: bronze_raw
+    database: EURO_URBAN_DW
+    schema: BRONZE_RAW
+    description: "Raw geospatial ingestion layer from Overture Maps for the Randstad metropolitan region."
+    tables:
+      - name: raw_buildings_randstad
+        description: "Raw footprint and height data for ~3.63 million buildings."
+      - name: raw_roads_randstad
+        description: "Raw road network segments and classifications for ~820k links."
+      - name: raw_places_randstad
+        description: "Raw points of interest and essential services (~268k locations)."

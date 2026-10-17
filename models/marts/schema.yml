@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: fct_randstad_urban_grid
+    description: "Gold analytical mart aggregating urban density, infrastructure capacity, and 15-minute city accessibility scores across H3 resolution 8 hexagonal cells."
+    columns:
+      - name: h3_hex_id
+        description: "Unique Uber H3 index at resolution 8."
+        data_tests:
+          - unique
+          - not_null
+
+      - name: hex_boundary_geom
+        description: "Geographical polygon boundary of the H3 cell."
+        data_tests:
+          - not_null
+
+      - name: fifteen_min_city_score
+        description: "Composite accessibility score ranging from 0 to 100."
+        data_tests:
+          - not_null
+
+      - name: urban_typology
+        description: "Categorical classification of the urban fabric."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - 'Dense Transit-Oriented Urban'
+                  - 'Suburban Residential Fabric'
+                  - 'Transport Corridor / Rural Fringe'
+                  - 'Sparse / Open Space'
