@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Randstad Spatial Lakehouse</title>
+
+<link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+<style>
+:root {
+  --bg: #050812;
+  --text: #e2e8f0;
+  --muted: #64748b;
+  --border-glass: rgba(255, 255, 255, 0.09);
+  --bg-glass: rgba(15, 23, 42, 0.68);
+  --grad-cyan: linear-gradient(135deg, #38bdf8, #818cf8);
+  --accent: #38bdf8;
+  --panel-bg: rgba(9, 13, 27, 0.78);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background-color: var(--bg);
+  background-image: 
+    radial-gradient(circle at 12% 20%, rgba(56, 189, 248, 0.12), transparent 28%),
+    radial-gradient(circle at 88% 80%, rgba(129, 140, 248, 0.12), transparent 28%),
+    radial-gradient(circle at 50% 50%, rgba(16, 185, 129, 0.05), transparent 40%);
+  color: var(--text);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 12px;
+}
+
+.crystal {
+  background: var(--panel-bg);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--border-glass);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.header-row {
+  flex: 0 0 76px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  gap: 16px;
+}
+
+.brand { display: flex; flex-direction: column; gap: 2px; }
+.brand h1 {
+  font-size: 19px;
+  font-weight: 800;
+  background: var(--grad-cyan);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  letter-spacing: -0.5px;
+  text-transform: uppercase;
+}
+.brand p { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+
+.score-badge {
+  font-size: 9px;
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-block;
+  margin-top: 3px;
+  width: fit-content;
+}
+
+.kpi-container {
+  display: flex;
+  gap: 12px;
+  flex: 1;
+  justify-content: center;
+  height: 100%;
+  padding: 8px 0;
+}
+.kpi-card {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-glass);
+  border-radius: 10px;
+  min-width: 145px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+.kpi-title {
+  position: absolute;
+  top: 7px;
+  left: 10px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.kpi-value {
+  font-size: 25px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  margin-top: 12px;
+}
+#kpiScore { color: #4ade80; }
+#kpiBldgs { color: #a78bfa; }
+#kpiRoads { color: #fbbf24; }
+
+.city-nav {
+  display: flex;
+  gap: 5px;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 4px;
+  border-radius: 9px;
+  border: 1px solid var(--border-glass);
+}
+.city-nav button {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 7px 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.city-nav button:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+.city-nav button.active {
+  background: var(--grad-cyan);
+  color: #050812;
+  box-shadow: 0 2px 10px rgba(56, 189, 248, 0.35);
+}
+.city-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 290px 1fr 290px;
+  gap: 12px;
+}
+
+.side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.chart-box {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+}
+.chart-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.chart-title span {
+  font-size: 9px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.chart-canvas-wrapper { flex: 1; position: relative; min-height: 0; }
+
+.center-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.map-box {
+  flex: 1;
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid var(--border-glass);
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.4);
+}
+#map { width: 100%; height: 100%; }
+
+.bottom-chart-box {
+  flex: 0 0 145px;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+}
+
+.map-controls {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+  display: flex;
+  gap: 4px;
+  background: rgba(9, 13, 27, 0.88);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-glass);
+  border-radius: 8px;
+  padding: 3px;
+}
+.map-controls button {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 6px 11px;
+  cursor: pointer;
+  transition: 0.2s;
+  text-transform: uppercase;
+  border-radius: 6px;
+}
+.map-controls button:hover { color: var(--text); }
+.map-controls button.active {
+  background: rgba(56, 189, 248, 0.16);
+  color: var(--accent);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.map-smart-hud {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(9, 13, 27, 0.9);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  transition: all 0.25s ease;
+  pointer-events: none;
+}
+.hud-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 8px #38bdf8;
+}
+
+.map-legend {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 10;
+  background: rgba(9, 13, 27, 0.88);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-glass);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 170px;
+}
+.map-legend-title {
+  font-size: 9px;
+  text-transform: uppercase;
+  color: #94a3b8;
+  font-weight: 700;
+  display: flex;
+  justify-content: space-between;
+}
+.map-legend-bar {
+  height: 7px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #ef4444, #f59e0b, #a3e635, #22c55e, #15803d);
+}
+.map-legend-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.map-status-indicator {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 10;
+  background: rgba(9, 13, 27, 0.85);
+  backdrop-filter: blur(8px);
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 9px;
+  color: #a3e635;
+  border: 1px solid rgba(163, 230, 53, 0.3);
+  pointer-events: none;
+}
+
+.maplibregl-popup-content {
+  background: rgba(9, 13, 27, 0.95);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 10px;
+  color: var(--text);
+  padding: 12px 14px;
+  font-size: 11px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+  min-width: 210px;
+}
+.maplibregl-popup-tip { border-top-color: rgba(9, 13, 27, 0.95) !important; }
+.maplibregl-ctrl-attrib { display: none; }
+
+#loaderOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 8, 18, 0.95);
+  backdrop-filter: blur(12px);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: 0.4s;
+}
+#loaderOverlay.hidden { opacity: 0; pointer-events: none; }
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.file-modal { text-align: center; padding: 36px; max-width: 460px; }
+.file-modal h3 { margin-bottom: 10px; color: var(--text); font-size: 20px; }
+.file-modal p { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 22px; }
+.btn-upload {
+  background: var(--grad-cyan);
+  color: #050812;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 800;
+  cursor: pointer;
+  font-size: 13px;
+  display: inline-block;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4);
+}
+</style>
+</head>
+<body>
+
+<div id="loaderOverlay">
+  <div id="spinnerView" style="text-align:center;">
+    <div class="spinner"></div>
+    <div style="color:var(--muted);font-size:13px; letter-spacing:1px; text-transform:uppercase;" id="loaderMsg">Initializing Spatial Grid...</div>
+  </div>
+  <div id="filePickerView" class="crystal file-modal" style="display:none;">
+    <h3>Local Development Mode</h3>
+    <p>Select your exported <b>data.csv</b> from Windows to render the H3 Spatial Lakehouse and Metropolitan City Boundaries.</p>
+    <label for="csvUpload" class="btn-upload">📂 Select data.csv</label>
+    <input type="file" id="csvUpload" accept=".csv" style="display:none;">
+  </div>
+</div>
+
+<header class="crystal header-row">
+  <div class="brand">
+    <h1>Randstad Spatial Lakehouse</h1>
+    <p>15-Minute City Benchmark & Urban Fabric Analytics</p>
+    <div class="score-badge">ℹ️ 15-Min Score = Transit (25) + Health (25) + Edu (25) + Retail (25)</div>
+  </div>
+  
+  <div class="kpi-container">
+    <div class="kpi-card"><span class="kpi-title">Active Hexes in View</span><span class="kpi-value" id="kpiCount">-</span></div>
+    <div class="kpi-card"><span class="kpi-title">Avg Score (View)</span><span class="kpi-value" id="kpiScore">-</span></div>
+    <div class="kpi-card"><span class="kpi-title">Buildings (View)</span><span class="kpi-value" id="kpiBldgs">-</span></div>
+    <div class="kpi-card"><span class="kpi-title">Road Links (View)</span><span class="kpi-value" id="kpiRoads">-</span></div>
+  </div>
+
+  <div class="city-nav" id="cityTabs">
+    <button data-city="all" class="active">Randstad</button>
+    <button data-city="amsterdam"><span class="city-dot" style="background:#38bdf8"></span>Amsterdam</button>
+    <button data-city="rotterdam"><span class="city-dot" style="background:#4ade80"></span>Rotterdam</button>
+    <button data-city="hague"><span class="city-dot" style="background:#f59e0b"></span>The Hague</button>
+    <button data-city="utrecht"><span class="city-dot" style="background:#c084fc"></span>Utrecht</button>
+  </div>
+</header>
+
+<main class="workspace">
+  
+  <!-- Left Charts -->
+  <aside class="side-col">
+    <div class="crystal chart-box">
+      <div class="chart-title">1. 15-Min Score Distribution <span>(Hex Count)</span></div>
+      <div class="chart-canvas-wrapper"><canvas id="chartDist"></canvas></div>
+    </div>
+    <div class="crystal chart-box">
+      <div class="chart-title">2. Urban Typology Mix <span>(Share)</span></div>
+      <div class="chart-canvas-wrapper"><canvas id="chartType"></canvas></div>
+    </div>
+    <div class="crystal chart-box">
+      <div class="chart-title">3. Living Pillars Volume <span>(Total POIs)</span></div>
+      <div class="chart-canvas-wrapper"><canvas id="chartPillars"></canvas></div>
+    </div>
+  </aside>
+
+  <!-- Center Map & Chart -->
+  <section class="center-col">
+    <div class="map-box">
+      <div id="map"></div>
+      <div class="map-controls">
+        <button id="btn2D" class="active">2D Flat Grid</button>
+        <button id="btn3D">3D Urban Prism</button>
+      </div>
+      <div class="map-smart-hud" id="smartFocusHud">
+        <span class="hud-pulse" id="hudDot"></span>
+        <span id="hudText">Macro View • All 4 Metro Regions</span>
+      </div>
+      <div class="map-status-indicator" id="mapStatus">🟢 Smart Zoom Filter Active • Official Boundaries Loaded</div>
+      <div class="map-legend">
+        <div class="map-legend-title"><span>15-Min City Score</span><span>H3 Res 8</span></div>
+        <div class="map-legend-bar"></div>
+        <div class="map-legend-labels"><span>0% (Rural)</span><span>50%</span><span>100% (Core)</span></div>
+      </div>
+    </div>
+    <div class="crystal bottom-chart-box">
+      <div class="chart-title">4. Average Accessibility Score by Urban Fabric Typology <span>(0 - 100%)</span></div>
+      <div class="chart-canvas-wrapper"><canvas id="chartAvgScore"></canvas></div>
+    </div>
+  </section>
+
+  <!-- Right Charts -->
+  <aside class="side-col">
+    <div class="crystal chart-box">
+      <div class="chart-title">5. Regional City Benchmark <span>(Avg Score)</span></div>
+      <div class="chart-canvas-wrapper"><canvas id="chartCityComp"></canvas></div>
+    </div>
+    <div class="crystal chart-box">
+      <div class="chart-title">6. Pillar Coverage Balance <span>(% Hexes w/ Access)</span></div>
+      <div class="chart-canvas-wrapper"><canvas id="chartRadar"></canvas></div>
+    </div>
+    <div class="crystal chart-box">
+      <div class="chart-title">7. Built & Road Intensity <span>(Avg / Hex by Score)</span></div>
+      <div class="chart-canvas-wrapper"><canvas id="chartIntensity"></canvas></div>
+    </div>
+  </aside>
+
+</main>
+
+<script>
+const DATA_CSV_URL = 'data.csv';
+const NL_GEMEENTE_GEOJSON_URL = 'https://cartomap.github.io/nl/wgs84/gemeente_2023.geojson';
+
+const CITIES = {
+  // Start zoom at 8.5 to show the full raw grid block initially
+  all:       { label: 'Randstad',  center: [4.72, 52.12], zoom: 8.5,  radius: 999, color: '#38bdf8', muniNames: [] },
+  amsterdam: { label: 'Amsterdam', center: [4.8952, 52.3702], zoom: 10.7, radius: 15.5, color: '#38bdf8', muniNames: ['Amsterdam', 'Amstelveen', 'Diemen', 'Ouder-Amstel', 'Zaanstad'] },
+  rotterdam: { label: 'Rotterdam', center: [4.4777, 51.9244], zoom: 10.8, radius: 14.0, color: '#4ade80', muniNames: ['Rotterdam', 'Schiedam', 'Vlaardingen', 'Capelle aan den IJssel', 'Ridderkerk', 'Barendrecht'] },
+  hague:     { label: 'The Hague', center: [4.3007, 52.0705], zoom: 11.0, radius: 11.5, color: '#f59e0b', muniNames: ["'s-Gravenhage", 'Rijswijk', 'Voorburg', 'Leidschendam-Voorburg', 'Delft', 'Wassenaar'] },
+  utrecht:   { label: 'Utrecht',   center: [5.1214, 52.0907], zoom: 11.0, radius: 12.0, color: '#c084fc', muniNames: ['Utrecht', 'Nieuwegein', 'IJsselstein', 'Houten', 'Zeist', 'De Bilt', 'Stichtse Vecht'] }
+};
+
+let map, rawFeatures = [], cityBoundaryFeatures = [], cityLabelFeatures = [];
+let officialBoundariesGeoJSON = null;
+let charts = {}, globalCityBenchmarks = { amsterdam: 0, rotterdam: 0, hague: 0, utrecht: 0 };
+let currentMode = '2D', manualCityLock = 'all', effectiveCity = 'all';
+
+Chart.defaults.color = '#64748b';
+Chart.defaults.borderColor = 'rgba(255,255,255,0.05)';
+Chart.defaults.font.family = 'Inter';
+Chart.defaults.font.size = 10;
+
+function calcDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371, dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function pointInRing(lon, lat, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    const intersect = ((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / ((yj - yi) || 1e-12) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function pointInGeometry(lon, lat, geom) {
+  if (!geom) return false;
+  if (geom.type === 'Polygon') {
+    return pointInRing(lon, lat, geom.coordinates[0]);
+  } else if (geom.type === 'MultiPolygon') {
+    return geom.coordinates.some(poly => pointInRing(lon, lat, poly[0]));
+  }
+  return false;
+}
+
+function dissolveHexClusterBoundary(hexPolygons) {
+  const edgeMap = new Map();
+  const keyPt = pt => `${pt[0].toFixed(5)},${pt[1].toFixed(5)}`;
+
+  hexPolygons.forEach(ring => {
+    for (let i = 0; i < ring.length - 1; i++) {
+      const a = ring[i], b = ring[i + 1];
+      const ka = keyPt(a), kb = keyPt(b);
+      if (ka === kb) continue;
+      const revKey = `${kb}->${ka}`;
+      if (edgeMap.has(revKey)) {
+        edgeMap.delete(revKey);
+      } else {
+        edgeMap.set(`${ka}->${kb}`, [a, b]);
+      }
+    }
+  });
+
+  return Array.from(edgeMap.values());
+}
+
+if (window.location.protocol === 'file:') {
+  document.getElementById('spinnerView').style.display = 'none';
+  document.getElementById('filePickerView').style.display = 'block';
+} else {
+  fetchData(DATA_CSV_URL);
+}
+
+document.getElementById('csvUpload').addEventListener('change', e => {
+  if (e.target.files.length > 0) {
+    document.getElementById('filePickerView').style.display = 'none';
+    document.getElementById('spinnerView').style.display = 'block';
+    fetchData(e.target.files[0]);
+  }
+});
+
+async function fetchData(fileOrUrl) {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
+    const res = await fetch(NL_GEMEENTE_GEOJSON_URL, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (res.ok) officialBoundariesGeoJSON = await res.json();
+  } catch (e) {
+    officialBoundariesGeoJSON = null;
+  }
+
+  Papa.parse(fileOrUrl, {
+    download: typeof fileOrUrl === 'string',
+    header: true,
+    skipEmptyLines: true,
+    complete: (results) => {
+      if (!results.data || results.data.length === 0) {
+        document.getElementById('spinnerView').style.display = 'none';
+        document.getElementById('filePickerView').style.display = 'block';
+        return;
+      }
+      processData(results.data);
+    },
+    error: (err) => {
+      document.getElementById('spinnerView').style.display = 'none';
+      document.getElementById('filePickerView').style.display = 'block';
+    }
+  });
+}
+
+function processData(data) {
+  const cityHexRings = { amsterdam: [], rotterdam: [], hague: [], utrecht: [] };
+  const cityStats = { amsterdam: { s: 0, c: 0 }, rotterdam: { s: 0, c: 0 }, hague: { s: 0, c: 0 }, utrecht: { s: 0, c: 0 } };
+
+  const officialMetroPolys = {};
+  if (officialBoundariesGeoJSON && officialBoundariesGeoJSON.features) {
+    for (const [cityKey, cfg] of Object.entries(CITIES)) {
+      if (cityKey === 'all') continue;
+      officialMetroPolys[cityKey] = officialBoundariesGeoJSON.features.filter(f => {
+        const name = f.properties?.statnaam || f.properties?.name || '';
+        return cfg.muniNames.includes(name);
+      });
+    }
+  }
+
+  rawFeatures = data.map(row => {
+    const normRow = {};
+    for (let k in row) normRow[k.toLowerCase()] = row[k];
+
+    const getVal = (aliases) => {
+      const key = aliases.find(a => normRow.hasOwnProperty(a));
+      return key ? normRow[key] : null;
+    };
+
+    const id = getVal(['h3_hex_id', 'h3_hex', 'id']);
+    const score = parseFloat(getVal(['fifteen_min_city_score', 'score'])) || 0;
+    const typology = getVal(['urban_typology', 'typology']) || 'Sparse / Open Space';
+    let geojsonStr = getVal(['geojson', 'hex_boundary_geom']);
+
+    if (!geojsonStr) return null;
+    let geom;
+    try { geom = JSON.parse(geojsonStr); } catch (e) { return null; }
+
+    const coords = geom.coordinates[0];
+    let cx = 0, cy = 0;
+    coords.forEach(pt => { cx += pt[0]; cy += pt[1]; });
+    cx /= coords.length;
+    cy /= coords.length;
+
+    const bldgs = parseInt(getVal(['total_buildings'])) || 0;
+    const roads = parseInt(getVal(['total_road_segments', 'roads'])) || 0;
+    const amenities = parseInt(getVal(['total_amenities'])) || 0;
+
+    let matchedCity = 'other';
+    for (const cityKey of ['amsterdam', 'rotterdam', 'hague', 'utrecht']) {
+      const polys = officialMetroPolys[cityKey];
+      if (polys && polys.length > 0) {
+        if (polys.some(polyFeat => pointInGeometry(cx, cy, polyFeat.geometry))) {
+          matchedCity = cityKey;
+          break;
+        }
+      }
+    }
+
+    if (matchedCity === 'other' && (!officialBoundariesGeoJSON || !officialBoundariesGeoJSON.features)) {
+      let minD = Infinity;
+      for (const [city, config] of Object.entries(CITIES)) {
+        if (city === 'all') continue;
+        const d = calcDistance(cy, cx, config.center[1], config.center[0]);
+        if (d <= config.radius && d < minD && (bldgs >= 5 || score > 0 || d <= config.radius * 0.55)) {
+          minD = d;
+          matchedCity = city;
+        }
+      }
+    }
+
+    if (cityHexRings[matchedCity]) {
+      cityHexRings[matchedCity].push(coords);
+      cityStats[matchedCity].s += score;
+      cityStats[matchedCity].c++;
+    }
+
+    return {
+      type: 'Feature',
+      geometry: geom,
+      properties: {
+        id: id,
+        score: score,
+        typology: typology,
+        city: matchedCity, // Note: Contains 'other' for rural hexes
+        isUrban: (matchedCity !== 'other' || bldgs >= 15 || score >= 25) ? 1 : 0,
+        cityColor: CITIES[matchedCity] ? CITIES[matchedCity].color : '#475569',
+        lng: cx,
+        lat: cy,
+        buildings: bldgs,
+        roads: roads,
+        amenities: amenities,
+        transit: parseInt(getVal(['transit_stops', 'transit_stops_count'])) || 0,
+        health: parseInt(getVal(['healthcare_facilities', 'healthcare_count'])) || 0,
+        edu: parseInt(getVal(['education_facilities', 'education_count'])) || 0,
+        retail: parseInt(getVal(['daily_retail_amenities', 'retail_count'])) || 0,
+        height: Math.min(Math.max(bldgs * 1.8, 12), 1800)
+      }
+    };
+  }).filter(f => f !== null);
+
+  cityBoundaryFeatures = [];
+  cityLabelFeatures = [];
+  for (const cityKey of ['amsterdam', 'rotterdam', 'hague', 'utrecht']) {
+    const avg = cityStats[cityKey].c ? (cityStats[cityKey].s / cityStats[cityKey].c) : 0;
+    globalCityBenchmarks[cityKey] = avg;
+
+    const polys = officialMetroPolys[cityKey];
+    if (polys && polys.length > 0) {
+      polys.forEach(polyFeat => {
+        cityBoundaryFeatures.push({
+          type: 'Feature',
+          geometry: polyFeat.geometry,
+          properties: {
+            city: cityKey,
+            label: CITIES[cityKey].label,
+            color: CITIES[cityKey].color,
+            avgScore: avg.toFixed(1)
+          }
+        });
+      });
+    } else {
+      const outerEdges = dissolveHexClusterBoundary(cityHexRings[cityKey]);
+      if (outerEdges.length > 0) {
+        cityBoundaryFeatures.push({
+          type: 'Feature',
+          geometry: { type: 'MultiLineString', coordinates: outerEdges },
+          properties: {
+            city: cityKey,
+            label: CITIES[cityKey].label,
+            color: CITIES[cityKey].color,
+            avgScore: avg.toFixed(1)
+          }
+        });
+      }
+    }
+
+    cityLabelFeatures.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: CITIES[cityKey].center },
+      properties: {
+        city: cityKey,
+        title: `${CITIES[cityKey].label.toUpperCase()} • ${avg.toFixed(0)}%`,
+        color: CITIES[cityKey].color
+      }
+    });
+  }
+
+  initUI();
+  initMap();
+}
+
+function initMap() {
+  map = new maplibregl.Map({
+    container: 'map',
+    style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+    center: CITIES.all.center,
+    zoom: CITIES.all.zoom,
+    pitch: 0,
+    antialias: true
+  });
+
+  map.on('load', () => {
+    map.addSource('hexgrid', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: rawFeatures }
+    });
+
+    map.addSource('city-boundaries', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: cityBoundaryFeatures }
+    });
+
+    map.addSource('city-labels', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: cityLabelFeatures }
+    });
+
+    map.addLayer({
+      id: 'city-zone-fill',
+      type: 'fill',
+      source: 'city-boundaries',
+      layout: { visibility: 'none' }, // Start hidden
+      paint: {
+        'fill-color': ['get', 'color'],
+        'fill-opacity': 0.06
+      }
+    });
+
+    map.addLayer({
+      id: 'hex-fill',
+      type: 'fill',
+      source: 'hexgrid',
+      paint: {
+        'fill-color': [
+          'interpolate', ['linear'], ['get', 'score'],
+          0, '#ef4444',
+          25, '#f59e0b',
+          50, '#a3e635',
+          75, '#22c55e',
+          100, '#15803d'
+        ],
+        'fill-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          9, 0.85,
+          12.8, 0.45,
+          13.5, 0.0
+        ]
+      }
+    });
+
+    map.addLayer({
+      id: 'hex-3d',
+      type: 'fill-extrusion',
+      source: 'hexgrid',
+      layout: { visibility: 'none' },
+      paint: {
+        'fill-extrusion-color': [
+          'interpolate', ['linear'], ['get', 'score'],
+          0, '#ef4444',
+          25, '#f59e0b',
+          50, '#a3e635',
+          75, '#22c55e',
+          100, '#15803d'
+        ],
+        'fill-extrusion-height': ['get', 'height'],
+        'fill-extrusion-opacity': [
+          'interpolate', ['linear'], ['zoom'],
+          9, 0.88,
+          12.8, 0.45,
+          13.5, 0.0
+        ]
+      }
+    });
+
+    map.addLayer({
+      id: 'hex-lines',
+      type: 'line',
+      source: 'hexgrid',
+      paint: {
+        'line-color': [
+          'interpolate', ['linear'], ['zoom'],
+          9, 'rgba(5, 8, 18, 0.65)',
+          13.2, ['get', 'cityColor']
+        ],
+        'line-width': [
+          'interpolate', ['linear'], ['zoom'],
+          9, 0.5,
+          13.5, 2.2
+        ]
+      }
+    });
+
+    map.addLayer({
+      id: 'city-zone-glow',
+      type: 'line',
+      source: 'city-boundaries',
+      layout: { visibility: 'none' }, // Start hidden
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': 6,
+        'line-opacity': 0.28,
+        'line-blur': 4
+      }
+    });
+
+    map.addLayer({
+      id: 'city-zone-border',
+      type: 'line',
+      source: 'city-boundaries',
+      layout: { visibility: 'none' }, // Start hidden
+      paint: {
+        'line-color': ['get', 'color'],
+        'line-width': 2,
+        'line-opacity': 0.95
+      }
+    });
+
+    const layers = map.getStyle().layers;
+    const labelLayerId = layers.find(l => l.type === 'symbol' && l.layout && l.layout['text-field'])?.id;
+    if (map.getSource('carto')) {
+      map.addLayer({
+        id: '3d-buildings',
+        source: 'carto',
+        'source-layer': 'building',
+        filter: ['==', 'extrude', 'true'],
+        type: 'fill-extrusion',
+        minzoom: 13,
+        paint: {
+          'fill-extrusion-color': '#38bdf8',
+          'fill-extrusion-height': ['get', 'height'],
+          'fill-extrusion-opacity': 0.75
+        }
+      }, labelLayerId);
+    }
+
+    map.addLayer({
+      id: 'city-zone-labels',
+      type: 'symbol',
+      source: 'city-labels',
+      layout: {
+        'visibility': 'none', // Start hidden
+        'text-field': ['get', 'title'],
+        'text-font': ['Open Sans Bold', 'Arial Unicode MS Bold'],
+        'text-size': 11,
+        'text-offset': [0, 0],
+        'text-anchor': 'center'
+      },
+      paint: {
+        'text-color': '#ffffff',
+        'text-halo-color': '#050812',
+        'text-halo-width': 2.5
+      }
+    });
+
+    map.on('click', 'hex-fill', e => showPopup(e));
+    map.on('click', 'hex-3d', e => showPopup(e));
+    map.on('mouseenter', 'hex-fill', () => map.getCanvas().style.cursor = 'pointer');
+    map.on('mouseleave', 'hex-fill', () => map.getCanvas().style.cursor = '');
+
+    map.on('moveend', updateAnalyticsFromBounds);
+
+    evaluateSmartZoomFilter();
+    document.getElementById('loaderOverlay').classList.add('hidden');
+    updateAnalyticsFromBounds();
+  });
+}
+
+function showPopup(e) {
+  if (!e.features || !e.features.length) return;
+  const p = e.features[0].properties;
+  const cityLabel = CITIES[p.city] ? CITIES[p.city].label : 'Randstad Fringe';
+  const html = `
+    <div style="margin-bottom:8px; border-bottom:1px solid rgba(255,255,255,0.12); padding-bottom:6px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <strong style="color:#38bdf8; font-size:15px;">Score: ${p.score}%</strong>
+        <span style="font-size:9px; padding:2px 6px; border-radius:4px; background:rgba(56,189,248,0.15); color:#e2e8f0;">${cityLabel}</span>
+      </div>
+      <span style="color:#94a3b8; font-size:10px;">${p.typology}</span>
+    </div>
+    <div style="display:grid; grid-template-columns:1fr auto; gap:4px 12px; font-size:11px;">
+      <span style="color:#94a3b8;">H3 Index:</span> <strong style="color:#38bdf8; font-family:monospace;">${p.id}</strong>
+      <span style="color:#94a3b8;">Buildings:</span> <strong style="color:#fff;">${Number(p.buildings).toLocaleString()}</strong>
+      <span style="color:#94a3b8;">Road Links:</span> <strong style="color:#fff;">${Number(p.roads).toLocaleString()}</strong>
+      <span style="color:#94a3b8;">Total POIs:</span> <strong style="color:#fff;">${Number(p.amenities).toLocaleString()}</strong>
+      <span style="color:#94a3b8;">Transit / Health:</span> <strong style="color:#4ade80;">${p.transit} / ${p.health}</strong>
+      <span style="color:#94a3b8;">Edu / Retail:</span> <strong style="color:#facc15;">${p.edu} / ${p.retail}</strong>
+    </div>
+  `;
+  new maplibregl.Popup({ closeButton: false }).setLngLat(e.lngLat).setHTML(html).addTo(map);
+}
+
+function initUI() {
+  document.getElementById('btn2D').onclick = () => setRenderMode('2D');
+  document.getElementById('btn3D').onclick = () => setRenderMode('3D');
+
+  document.getElementById('cityTabs').addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const cityKey = btn.dataset.city;
+    manualCityLock = cityKey;
+
+    const cfg = CITIES[cityKey] || CITIES.all;
+    if (map) {
+      map.flyTo({
+        center: cfg.center,
+        zoom: cfg.zoom,
+        pitch: currentMode === '3D' ? 58 : 0,
+        duration: 1350
+      });
+    }
+  });
+}
+
+function evaluateSmartZoomFilter() {
+  if (!map || !map.getLayer('hex-fill')) return;
+
+  const zoom = map.getZoom();
+  const center = map.getCenter();
+
+  // If user manually clicked a city tab, respect it while zoomed in; if they zoom all the way out (< 9.1), unlock back to full view.
+  if (manualCityLock !== 'all' && zoom < 9.1) {
+    manualCityLock = 'all';
+  }
+
+  const hudDot = document.getElementById('hudDot');
+  const hudText = document.getElementById('hudText');
+
+  let hexFilter = null;        // null = Show ALL 8,544 hexes (Image 1)
+  let boundaryFilter = null;
+  let showBoundaries = 'none'; // Hidden at full macro view, revealed on zoom-in
+
+  if (manualCityLock !== 'all') {
+    // User clicked a specific city button in the top bar
+    effectiveCity = manualCityLock;
+    hexFilter = ['==', ['get', 'city'], effectiveCity];
+    boundaryFilter = ['==', ['get', 'city'], effectiveCity];
+    showBoundaries = 'visible';
+
+    const cfg = CITIES[effectiveCity];
+    hudDot.style.background = cfg.color;
+    hudDot.style.boxShadow = `0 0 10px ${cfg.color}`;
+    hudText.innerText = zoom >= 13.3
+      ? `🔍 Building-Level View • ${cfg.label} Boundary`
+      : `🎯 Locked Focus • ${cfg.label} Metro Region`;
+
+  } else if (zoom < 9.3) {
+    // STAGE 1 (Full Screen / Zoomed Out): Show the entire 8,544-cell Randstad grid (Image 1)
+    effectiveCity = 'all';
+    hexFilter = null; // All hexes visible
+    showBoundaries = 'none';
+
+    hudDot.style.background = '#38bdf8';
+    hudDot.style.boxShadow = '0 0 10px #38bdf8';
+    hudText.innerText = '🌐 Full Randstad Grid • All 8,544 Hexes (Zoom in to filter states)';
+
+  } else if (zoom >= 9.3 && zoom < 10.65) {
+    // STAGE 2 (Medium Zoom In): Filter out rural noise and reveal the 4 Metro States with glowing borders (Image 2)
+    effectiveCity = 'metros';
+    hexFilter = ['!=', ['get', 'city'], 'other'];
+    boundaryFilter = null;
+    showBoundaries = 'visible';
+
+    hudDot.style.background = '#4ade80';
+    hudDot.style.boxShadow = '0 0 10px #4ade80';
+    hudText.innerText = '🗺️ Metro States View • 4 Provinces Clipped & Outlined';
+
+  } else {
+    // STAGE 3 (Deep Zoom >= 10.65): Auto-focus on the closest metro state to camera center
+    let closest = 'metros', minD = Infinity;
+    for (const [cityKey, cfg] of Object.entries(CITIES)) {
+      if (cityKey === 'all') continue;
+      const d = calcDistance(center.lat, center.lng, cfg.center[1], cfg.center[0]);
+      if (d <= cfg.radius * 1.45 && d < minD) {
+        minD = d;
+        closest = cityKey;
+      }
+    }
+    effectiveCity = closest;
+
+    if (effectiveCity !== 'metros') {
+      hexFilter = ['==', ['get', 'city'], effectiveCity];
+      boundaryFilter = ['==', ['get', 'city'], effectiveCity];
+      showBoundaries = 'visible';
+
+      const cfg = CITIES[effectiveCity];
+      hudDot.style.background = cfg.color;
+      hudDot.style.boxShadow = `0 0 10px ${cfg.color}`;
+      hudText.innerText = zoom >= 13.3
+        ? `🔍 Building-Level View • ${cfg.label} Boundary`
+        : `🎯 Auto-Focused • ${cfg.label} Metro Region`;
+    } else {
+      hexFilter = ['!=', ['get', 'city'], 'other'];
+      boundaryFilter = null;
+      showBoundaries = 'visible';
+    }
+  }
+
+  // Sync top navigation bar highlight smoothly
+  const navActiveCity = (effectiveCity === 'metros') ? 'all' : effectiveCity;
+  document.querySelectorAll('#cityTabs button').forEach(b => {
+    b.classList.toggle('active', b.dataset.city === navActiveCity);
+  });
+
+  // Apply hex filter
+  ['hex-fill', 'hex-3d', 'hex-lines'].forEach(layerId => {
+    map.setFilter(layerId, hexFilter);
+  });
+
+  // Apply state boundaries visibility and filter
+  ['city-zone-fill', 'city-zone-glow', 'city-zone-border', 'city-zone-labels'].forEach(layerId => {
+    if (map.getLayer(layerId)) {
+      map.setLayoutProperty(layerId, 'visibility', showBoundaries);
+      map.setFilter(layerId, boundaryFilter);
+    }
+  });
+}
+
+function setRenderMode(mode) {
+  currentMode = mode;
+  document.getElementById('btn2D').classList.toggle('active', mode === '2D');
+  document.getElementById('btn3D').classList.toggle('active', mode === '3D');
+  if (!map) return;
+  map.setLayoutProperty('hex-fill', 'visibility', mode === '2D' ? 'visible' : 'none');
+  map.setLayoutProperty('hex-3d', 'visibility', mode === '3D' ? 'visible' : 'none');
+  map.easeTo({ pitch: mode === '3D' ? 58 : 0, duration: 900 });
+}
+
+let analyticsTimer;
+function updateAnalyticsFromBounds() {
+  if (!map) return;
+
+  clearTimeout(analyticsTimer);
+  analyticsTimer = setTimeout(() => {
+    evaluateSmartZoomFilter();
+
+    const bounds = map.getBounds();
+
+    const visibleFeatures = rawFeatures.filter(f => {
+      // Respect the 3-stage visual filtering for the analytics as well
+      if (effectiveCity === 'metros') {
+        if (f.properties.city === 'other') return false; // Hide noise
+      } else if (effectiveCity !== 'all') {
+        if (f.properties.city !== effectiveCity) return false; // Isolate city
+      }
+      // If effectiveCity === 'all', don't filter out 'other'.
+      return bounds.contains([f.properties.lng, f.properties.lat]);
+    });
+
+    const count = visibleFeatures.length;
+    const avgSc = count ? visibleFeatures.reduce((s, f) => s + f.properties.score, 0) / count : 0;
+    const bldgs = visibleFeatures.reduce((s, f) => s + f.properties.buildings, 0);
+    const roads = visibleFeatures.reduce((s, f) => s + f.properties.roads, 0);
+
+    const fmt = num => num >= 1e6 ? (num / 1e6).toFixed(2) + 'M' : num >= 1e3 ? (num / 1e3).toFixed(1) + 'k' : num.toLocaleString();
+
+    document.getElementById('kpiCount').innerText = count.toLocaleString();
+    document.getElementById('kpiScore').innerText = avgSc.toFixed(1) + '%';
+    document.getElementById('kpiBldgs').innerText = fmt(bldgs);
+    document.getElementById('kpiRoads').innerText = fmt(Math.round(roads));
+
+    updateCharts(visibleFeatures);
+  }, 45);
+}
+
+function updateCharts(features) {
+  let scoreDist = [0, 0, 0, 0, 0]; // 0, 25, 50, 75, 100
+  let typeCounts = {};
+  let pillarTotals = [0, 0, 0, 0];
+  let pillarAccessHexCount = [0, 0, 0, 0]; // % of hexes with >= 1 POI
+  let typeScores = {};
+
+  // For Chart 7: Built & Road Intensity across Score Tiers (0%, 25%, 50%, 75%, 100%)
+  let tierBldgs = [0, 0, 0, 0, 0];
+  let tierRoads = [0, 0, 0, 0, 0];
+
+  features.forEach(f => {
+    const p = f.properties;
+    const tierIdx = p.score >= 100 ? 4 : p.score >= 75 ? 3 : p.score >= 50 ? 2 : p.score >= 25 ? 1 : 0;
+
+    // 1. Score Distribution
+    scoreDist[tierIdx]++;
+
+    // 2. Typology Mix
+    typeCounts[p.typology] = (typeCounts[p.typology] || 0) + 1;
+
+    // 4. Avg Score by Typology
+    if (!typeScores[p.typology]) typeScores[p.typology] = { sum: 0, count: 0 };
+    typeScores[p.typology].sum += p.score;
+    typeScores[p.typology].count++;
+
+    // 3. Pillars Volume
+    pillarTotals[0] += p.transit;
+    pillarTotals[1] += p.health;
+    pillarTotals[2] += p.edu;
+    pillarTotals[3] += p.retail;
+
+    // 6. Pillar Coverage (% of hexes with access)
+    if (p.transit > 0) pillarAccessHexCount[0]++;
+    if (p.health > 0) pillarAccessHexCount[1]++;
+    if (p.edu > 0) pillarAccessHexCount[2]++;
+    if (p.retail > 0) pillarAccessHexCount[3]++;
+
+    // 7. Built & Road Intensity by Score Tier
+    tierBldgs[tierIdx] += p.buildings;
+    tierRoads[tierIdx] += p.roads;
+  });
+
+  const totalHexes = Math.max(features.length, 1);
+  const typeLabels = Object.keys(typeCounts);
+  const avgScores = typeLabels.map(t => +(typeScores[t].sum / typeScores[t].count).toFixed(1));
+  const palette = ['#38bdf8', '#818cf8', '#4ade80', '#f59e0b', '#f472b6'];
+
+  // 1. Score Distribution (5 exact tiers: 0%, 25%, 50%, 75%, 100%)
+  drawChart('chartDist', 'bar', {
+    labels: ['0%', '25%', '50%', '75%', '100%'],
+    datasets: [{
+      data: scoreDist,
+      backgroundColor: ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'],
+      borderRadius: 4
+    }]
+  });
+
+  // 2. Urban Typology Mix
+  drawChart('chartType', 'doughnut', {
+    labels: typeLabels,
+    datasets: [{
+      data: Object.values(typeCounts),
+      backgroundColor: palette,
+      borderWidth: 0
+    }]
+  }, {
+    cutout: '64%',
+    plugins: { legend: { display: true, position: 'right', labels: { boxWidth: 8, font: { size: 9 }, color: '#94a3b8' } } }
+  });
+
+  // 3. Living Pillars Volume
+  drawChart('chartPillars', 'bar', {
+    labels: ['Transit', 'Health', 'Education', 'Retail'],
+    datasets: [{
+      data: pillarTotals,
+      backgroundColor: ['#38bdf8', '#f472b6', '#a78bfa', '#facc15'],
+      borderRadius: 4
+    }]
+  });
+
+  // 4. Average Accessibility Score by Urban Typology
+  drawChart('chartAvgScore', 'bar', {
+    labels: typeLabels,
+    datasets: [{
+      data: avgScores,
+      backgroundColor: palette,
+      borderRadius: 4
+    }]
+  }, {
+    indexAxis: 'y',
+    scales: {
+      x: { max: 100, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b', font: { size: 9 } } },
+      y: { grid: { display: false }, ticks: { color: '#e2e8f0', font: { size: 10 } } }
+    }
+  });
+
+  // 5. Regional City Benchmark (Always shows all 4 cities and highlights active city)
+  const cityKeys = ['amsterdam', 'rotterdam', 'hague', 'utrecht'];
+  const cityColors = cityKeys.map(k => (effectiveCity === 'all' || effectiveCity === 'metros' || effectiveCity === k) ? CITIES[k].color : 'rgba(100, 116, 139, 0.25)');
+  drawChart('chartCityComp', 'bar', {
+    labels: ['Amsterdam', 'Rotterdam', 'The Hague', 'Utrecht'],
+    datasets: [{
+      data: cityKeys.map(k => +globalCityBenchmarks[k].toFixed(1)),
+      backgroundColor: cityColors,
+      borderRadius: 4
+    }]
+  });
+
+  // 6. Pillar Coverage Balance (% of Hexes in View with >=1 facility)
+  const coveragePct = pillarAccessHexCount.map(c => +((c / totalHexes) * 100).toFixed(1));
+  drawChart('chartRadar', 'radar', {
+    labels: ['Transit %', 'Health %', 'Education %', 'Retail %'],
+    datasets: [{
+      data: coveragePct,
+      backgroundColor: 'rgba(56, 189, 248, 0.28)',
+      borderColor: '#38bdf8',
+      borderWidth: 1.5,
+      pointBackgroundColor: '#38bdf8',
+      pointRadius: 3
+    }]
+  }, {
+    scales: {
+      r: {
+        min: 0,
+        max: 100,
+        ticks: { display: false },
+        grid: { color: 'rgba(255,255,255,0.08)' },
+        angleLines: { color: 'rgba(255,255,255,0.08)' },
+        pointLabels: { color: '#cbd5e1', font: { size: 9, weight: '600' } }
+      }
+    }
+  });
+
+  // 7. NEW: Built & Road Intensity (Avg Buildings & Road Links per Hex across Score Tiers)
+  const avgBldgsPerTier = tierBldgs.map((sum, idx) => scoreDist[idx] ? Math.round(sum / scoreDist[idx]) : 0);
+  const avgRoadsPerTier = tierRoads.map((sum, idx) => scoreDist[idx] ? Math.round(sum / scoreDist[idx]) : 0);
+
+  drawChart('chartIntensity', 'bar', {
+    labels: ['0%', '25%', '50%', '75%', '100%'],
+    datasets: [
+      {
+        label: 'Avg Buildings / Hex',
+        data: avgBldgsPerTier,
+        backgroundColor: '#a78bfa',
+        borderRadius: 3
+      },
+      {
+        label: 'Avg Road Links / Hex',
+        data: avgRoadsPerTier,
+        backgroundColor: '#fbbf24',
+        borderRadius: 3
+      }
+    ]
+  }, {
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top',
+        labels: { boxWidth: 8, font: { size: 9 }, color: '#94a3b8' }
+      }
+    }
+  });
+}
+
+function drawChart(id, type, data, extraOpts = {}) {
+  if (charts[id]) {
+    charts[id].data.labels = data.labels;
+    data.datasets.forEach((ds, idx) => {
+      if (charts[id].data.datasets[idx]) {
+        charts[id].data.datasets[idx].data = ds.data;
+        if (ds.backgroundColor) charts[id].data.datasets[idx].backgroundColor = ds.backgroundColor;
+      }
+    });
+    charts[id].update('none');
+    return;
+  }
+
+  const baseOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {}
+  };
+
+  if (type === 'bar') {
+    baseOpts.scales = {
+      x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748b', font: { size: 9 } } },
+      y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748b', font: { size: 9 } } }
+    };
+  }
+
+  const mergedOpts = {
+    ...baseOpts,
+    ...extraOpts,
+    plugins: { ...baseOpts.plugins, ...(extraOpts.plugins || {}) },
+    scales: { ...baseOpts.scales, ...(extraOpts.scales || {}) }
+  };
+
+  charts[id] = new Chart(document.getElementById(id), {
+    type: type,
+    data: data,
+    options: mergedOpts
+  });
+}
+</script>
+</body>
+</html>
